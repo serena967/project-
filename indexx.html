@@ -1,0 +1,1245 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Posyandu Remaja Digital</title>
+
+  <!-- CDN: Tailwind CSS untuk styling responsif -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- CDN: SheetJS (XLSX) untuk fitur Import & Export Excel -->
+  <!-- Library ini bekerja penuh di browser tanpa perlu Node.js -->
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+
+  <!-- CDN: Google Fonts - Plus Jakarta Sans -->
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { jakarta: ["Plus Jakarta Sans", "sans-serif"] },
+          colors: {
+            teal: {
+              50:"#f0fdfa",100:"#ccfbf1",200:"#99f6e4",300:"#5eead4",
+              400:"#2dd4bf",500:"#14b8a6",600:"#0d9488",700:"#0f766e",
+              800:"#115e59",900:"#134e4a",
+            },
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    body { font-family: "Plus Jakarta Sans", sans-serif; }
+
+    .header-gradient {
+      background: linear-gradient(135deg, #0f766e 0%, #0d9488 50%, #14b8a6 100%);
+    }
+
+    /* === Animasi baris tabel masuk === */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .row-anim { animation: fadeInUp 0.3s ease forwards; }
+
+    /* === Badge status gizi === */
+    .badge { padding: 3px 10px; border-radius: 9999px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.03em; }
+    .badge-kurus    { background:#fef9c3; color:#854d0e; }
+    .badge-normal   { background:#dcfce7; color:#14532d; }
+    .badge-gemuk    { background:#ffedd5; color:#7c2d12; }
+    .badge-obesitas { background:#fee2e2; color:#7f1d1d; }
+
+    /* === Modal overlay === */
+    .modal-wrap {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.50); z-index: 50;
+      align-items: center; justify-content: center;
+    }
+    .modal-wrap.show { display: flex; }
+
+    /* === Progress bar animasi === */
+    @keyframes progFill {
+      from { width: 0%; }
+      to   { width: var(--target-width, 100%); }
+    }
+
+    /* === Toast notifikasi === */
+    #toast {
+      position: fixed; bottom: 24px; left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1), opacity 0.3s;
+      opacity: 0; z-index: 100; min-width: 280px; max-width: 90vw;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+    /* === Drag & Drop zone === */
+    #drop-zone.drag-over {
+      border-color: #0d9488;
+      background: #f0fdfa;
+    }
+
+    /* === Scrollbar === */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-thumb { background: #5eead4; border-radius: 9999px; }
+
+    input:focus, select:focus {
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(20,184,166,0.3);
+    }
+    .btn-ripple { transition: transform 0.1s; }
+    .btn-ripple:active { transform: scale(0.95); }
+  </style>
+</head>
+
+<body class="bg-teal-50 min-h-screen text-gray-800">
+
+<!-- =====================================================
+     TOAST NOTIFIKASI (sukses / error / info)
+====================================================== -->
+<div id="toast" role="alert">
+  <div id="toast-inner" class="flex items-center gap-3 bg-white border rounded-2xl px-5 py-3.5 shadow-xl">
+    <span id="toast-icon" class="text-xl">✅</span>
+    <span id="toast-text" class="text-sm font-semibold text-gray-800"></span>
+  </div>
+</div>
+
+<!-- =====================================================
+     HEADER
+====================================================== -->
+<header class="header-gradient text-white shadow-lg">
+  <div class="max-w-5xl mx-auto px-4 py-6 flex flex-col sm:flex-row items-center gap-3">
+    <div class="bg-white/20 rounded-2xl p-3">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+      </svg>
+    </div>
+    <div class="text-center sm:text-left">
+      <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight">Posyandu Remaja Digital</h1>
+      <p class="text-teal-100 text-sm mt-0.5">Pencatatan Data Gizi Remaja – Kelas 5 &amp; 6 SD</p>
+    </div>
+    <div class="sm:ml-auto bg-white/15 border border-white/30 rounded-xl px-4 py-2 text-center min-w-[90px]">
+      <span id="counter-total" class="text-2xl font-bold block">0</span>
+      <span class="text-xs text-teal-100">Total Data</span>
+    </div>
+  </div>
+</header>
+
+<!-- =====================================================
+     MAIN
+====================================================== -->
+<main class="max-w-5xl mx-auto px-4 py-8 space-y-8">
+
+  <!-- -----------------------------------------------
+       SECTION 1: FORM INPUT
+       (Sequence: form → validasi → hitung → simpan)
+  ----------------------------------------------- -->
+  <section class="bg-white rounded-2xl shadow-sm border border-teal-100 overflow-hidden">
+    <div class="bg-gradient-to-r from-teal-600 to-teal-500 px-6 py-4 flex items-center gap-3">
+      <div class="bg-white/20 rounded-lg p-1.5">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+        </svg>
+      </div>
+      <h2 id="form-title" class="text-white font-bold text-lg">Tambah Data Remaja</h2>
+    </div>
+
+    <div class="p-6">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+
+        <!-- Nama Lengkap -->
+        <div class="sm:col-span-2">
+          <label class="block text-sm font-semibold text-teal-800 mb-1.5">
+            Nama Lengkap <span class="text-red-500">*</span>
+          </label>
+          <input id="input-nama" type="text" placeholder="Contoh: Budi Santoso"
+            class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50 focus:border-teal-400 transition"/>
+        </div>
+
+        <!-- Kelas -->
+        <div>
+          <label class="block text-sm font-semibold text-teal-800 mb-1.5">
+            Kelas <span class="text-red-500">*</span>
+          </label>
+          <select id="input-kelas"
+            class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50 focus:border-teal-400 transition appearance-none cursor-pointer">
+            <option value="">-- Pilih Kelas --</option>
+            <option value="1 SD">Kelas 1 SD</option>
+            <option value="2 SD">Kelas 2 SD</option>
+            <option value="3 SD">Kelas 3 SD</option>
+            <option value="4 SD">Kelas 4 SD</option>
+            <option value="5 SD">Kelas 5 SD</option>
+            <option value="6 SD">Kelas 6 SD</option>
+            <option value="7 SMP">Kelas 7 SMP</option>
+            <option value="8 SMP">Kelas 8 SMP</option>
+            <option value="9 SMP">Kelas 9 SMP</option>
+          </select>
+        </div>
+
+        <!-- Berat Badan -->
+        <div>
+          <label class="block text-sm font-semibold text-teal-800 mb-1.5">
+            Berat Badan (kg) <span class="text-red-500">*</span>
+          </label>
+          <input id="input-berat" type="number" min="10" max="200" placeholder="Contoh: 35"
+            class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50 focus:border-teal-400 transition"/>
+        </div>
+
+        <!-- Tinggi Badan -->
+        <div>
+          <label class="block text-sm font-semibold text-teal-800 mb-1.5">
+            Tinggi Badan (cm) <span class="text-red-500">*</span>
+          </label>
+          <input id="input-tinggi" type="number" min="50" max="250" placeholder="Contoh: 140"
+            class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50 focus:border-teal-400 transition"/>
+        </div>
+
+        <!-- Tekanan Darah (FIELD BARU) -->
+        <div>
+          <label class="block text-sm font-semibold text-teal-800 mb-1.5">
+            Tekanan Darah
+            <span class="text-gray-400 font-normal text-xs">(opsional, cth: 110/70)</span>
+          </label>
+          <input id="input-td" type="text" placeholder="Sistolik/Diastolik"
+            class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50 focus:border-teal-400 transition"/>
+        </div>
+
+        <!-- Pesan error validasi (IF/ELSE: ditampilkan jika ada field kosong) -->
+        <div id="pesan-error" class="sm:col-span-2 hidden">
+          <div class="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm font-medium">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+            </svg>
+            <span id="pesan-error-text">Semua field wajib diisi!</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex gap-3 mt-6">
+        <button id="btn-simpan" onclick="handleSubmit()"
+          class="btn-ripple flex-1 bg-teal-600 hover:bg-teal-700 text-white font-bold py-3
+                 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-sm">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+          </svg>
+          <span id="btn-simpan-text">Tambah Data</span>
+        </button>
+        <button id="btn-batal" onclick="resetForm()"
+          class="hidden btn-ripple px-6 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 rounded-xl text-sm transition">
+          Batal
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- -----------------------------------------------
+       SECTION 2: IMPORT & EXPORT EXCEL
+       Didukung SheetJS – berjalan 100% di browser
+  ----------------------------------------------- -->
+  <section class="bg-white rounded-2xl shadow-sm border border-teal-100 overflow-hidden">
+
+    <!-- Header kartu Excel -->
+    <div class="bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-4 flex items-center gap-3">
+      <div class="bg-white/20 rounded-lg p-1.5">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+      </div>
+      <div>
+        <h2 class="text-white font-bold text-lg">Import &amp; Export Excel</h2>
+        <p class="text-emerald-100 text-xs mt-0.5">Didukung SheetJS – berjalan penuh di browser tanpa instalasi</p>
+      </div>
+    </div>
+
+    <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+
+      <!-- ===== KOLOM KIRI: IMPORT ===== -->
+      <div class="space-y-4">
+        <h3 class="text-sm font-bold text-teal-800 flex items-center gap-2">
+          <span class="bg-teal-100 text-teal-700 rounded-lg p-1">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/>
+            </svg>
+          </span>
+          Import dari File Excel
+        </h3>
+
+        <!-- Area Drag & Drop -->
+        <div id="drop-zone"
+          class="border-2 border-dashed border-teal-200 rounded-xl p-6 text-center cursor-pointer
+                 hover:border-teal-400 hover:bg-teal-50/50 transition-all"
+          onclick="document.getElementById('file-input').click()"
+          ondragover="handleDragOver(event)"
+          ondragleave="handleDragLeave(event)"
+          ondrop="handleDrop(event)">
+          <div class="flex flex-col items-center gap-2 text-gray-400 pointer-events-none">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-teal-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            <p class="font-semibold text-sm text-gray-600">Seret file ke sini atau klik untuk pilih</p>
+            <p class="text-xs text-gray-400">Format: .xlsx / .xls</p>
+          </div>
+        </div>
+
+        <!-- Input file tersembunyi (trigger via tombol di atas) -->
+        <input id="file-input" type="file" accept=".xlsx,.xls" class="hidden" onchange="handleFileSelect(event)" />
+
+        <!-- Info format kolom yang diharapkan -->
+        <div class="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+          <p class="text-xs font-bold text-amber-700 mb-2">📋 Format Kolom Excel yang Dibutuhkan:</p>
+          <!-- LOOPING statis: daftar nama kolom yang harus ada -->
+          <div class="grid grid-cols-3 gap-1.5">
+            <span class="text-xs bg-white border border-amber-200 rounded-md px-2 py-1 text-amber-800 font-mono">Nama</span>
+            <span class="text-xs bg-white border border-amber-200 rounded-md px-2 py-1 text-amber-800 font-mono">Kelas</span>
+            <span class="text-xs bg-white border border-amber-200 rounded-md px-2 py-1 text-amber-800 font-mono">BB</span>
+            <span class="text-xs bg-white border border-amber-200 rounded-md px-2 py-1 text-amber-800 font-mono">TB</span>
+            <span class="text-xs bg-white border border-amber-200 rounded-md px-2 py-1 text-amber-800 font-mono">TekananDarah</span>
+            <span class="text-xs bg-amber-50 border border-amber-100 rounded-md px-2 py-1 text-amber-400 font-mono italic">opsional</span>
+          </div>
+          <p class="text-xs text-amber-600 mt-2">Contoh nilai Kelas: <strong>5 SD</strong> atau <strong>6 SD</strong></p>
+        </div>
+      </div>
+
+      <!-- ===== KOLOM KANAN: EXPORT ===== -->
+      <div class="space-y-4">
+        <h3 class="text-sm font-bold text-teal-800 flex items-center gap-2">
+          <span class="bg-teal-100 text-teal-700 rounded-lg p-1">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+            </svg>
+          </span>
+          Export ke File Excel
+        </h3>
+
+        <!-- Kotak ringkasan statistik data sebelum export -->
+        <div class="bg-teal-50 border border-teal-200 rounded-xl px-5 py-4 space-y-3">
+          <p class="text-xs font-bold text-teal-700">📊 Ringkasan Data yang Akan Diekspor (Kelas 5 &amp; 6 SD):</p>
+          <div class="grid grid-cols-2 gap-2">
+            <div class="bg-white rounded-lg px-3 py-2.5 border border-teal-100 text-center">
+              <span id="export-total" class="block text-2xl font-extrabold text-teal-700">0</span>
+              <span class="text-xs text-gray-500">Total Siswa</span>
+            </div>
+            <div class="bg-white rounded-lg px-3 py-2.5 border border-teal-100 text-center">
+              <span id="export-normal" class="block text-2xl font-extrabold text-green-600">0</span>
+              <span class="text-xs text-gray-500">Status Normal</span>
+            </div>
+            <div class="bg-white rounded-lg px-3 py-2.5 border border-amber-100 text-center">
+              <span id="export-kurus" class="block text-xl font-bold text-amber-600">0</span>
+              <span class="text-xs text-gray-500">Kurus</span>
+            </div>
+            <div class="bg-white rounded-lg px-3 py-2.5 border border-red-100 text-center">
+              <span id="export-abnormal" class="block text-xl font-bold text-red-500">0</span>
+              <span class="text-xs text-gray-500">Gemuk / Obesitas</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tombol Export utama -->
+        <button onclick="exportExcel()"
+          class="btn-ripple w-full bg-gradient-to-r from-emerald-600 to-teal-600
+                 hover:from-emerald-700 hover:to-teal-700 text-white font-bold py-3.5
+                 rounded-xl text-sm transition shadow-sm flex items-center justify-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+          Export ke Excel (.xlsx)
+        </button>
+
+        <!-- Tombol unduh template kosong -->
+        <button onclick="unduhTemplate()"
+          class="btn-ripple w-full border-2 border-teal-200 text-teal-700 font-semibold py-2.5
+                 rounded-xl text-sm transition hover:bg-teal-50 flex items-center justify-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+          </svg>
+          Unduh Template Excel Kosong
+        </button>
+      </div>
+    </div>
+
+    <!-- Progress bar import (hidden by default) -->
+    <div id="progress-wrap" class="hidden px-6 pb-6">
+      <div class="bg-teal-50 border border-teal-200 rounded-xl p-4">
+        <div class="flex justify-between items-center mb-2">
+          <span id="progress-label" class="text-sm font-semibold text-teal-700">Memproses file...</span>
+          <span id="progress-pct" class="text-sm font-bold text-teal-600">0%</span>
+        </div>
+        <div class="w-full bg-teal-100 rounded-full h-3 overflow-hidden">
+          <div id="progress-bar"
+            class="h-3 bg-gradient-to-r from-teal-400 to-emerald-500 rounded-full transition-all duration-500"
+            style="width:0%"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- -----------------------------------------------
+       SECTION 3: TABEL DATA
+       (Looping: setiap item di array → satu baris tabel)
+  ----------------------------------------------- -->
+  <section class="bg-white rounded-2xl shadow-sm border border-teal-100 overflow-hidden">
+    <div class="bg-gradient-to-r from-teal-700 to-teal-600 px-6 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
+      <div class="flex items-center gap-3">
+        <div class="bg-white/20 rounded-lg p-1.5">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+          </svg>
+        </div>
+        <h2 class="text-white font-bold text-lg">Data Remaja <span class="text-teal-200 text-sm font-normal">(Kelas 5 &amp; 6 SD)</span></h2>
+      </div>
+      <div class="sm:ml-auto flex items-center gap-2 bg-teal-500/40 border border-white/20 rounded-lg px-3 py-1.5 text-xs text-teal-100 font-medium">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/>
+        </svg>
+        Filter aktif: Kelas 5 &amp; 6 SD
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-teal-50 border-b border-teal-100">
+          <tr>
+            <th class="px-4 py-3 text-left text-xs font-bold text-teal-700 uppercase tracking-wider w-10">No</th>
+            <th class="px-4 py-3 text-left text-xs font-bold text-teal-700 uppercase tracking-wider">Nama</th>
+            <th class="px-4 py-3 text-left text-xs font-bold text-teal-700 uppercase tracking-wider">Kelas</th>
+            <th class="px-4 py-3 text-left text-xs font-bold text-teal-700 uppercase tracking-wider">BB (kg)</th>
+            <th class="px-4 py-3 text-left text-xs font-bold text-teal-700 uppercase tracking-wider">TB (cm)</th>
+            <th class="px-4 py-3 text-left text-xs font-bold text-teal-700 uppercase tracking-wider">IMT</th>
+            <th class="px-4 py-3 text-left text-xs font-bold text-teal-700 uppercase tracking-wider">T. Darah</th>
+            <th class="px-4 py-3 text-left text-xs font-bold text-teal-700 uppercase tracking-wider">Tanggal</th>
+            <th class="px-4 py-3 text-left text-xs font-bold text-teal-700 uppercase tracking-wider">Status Gizi</th>
+            <th class="px-4 py-3 text-center text-xs font-bold text-teal-700 uppercase tracking-wider">Aksi</th>
+          </tr>
+        </thead>
+        <!-- tbody diisi secara dinamis oleh JavaScript -->
+        <tbody id="tabel-body"></tbody>
+      </table>
+
+      <!-- State kosong -->
+      <div id="empty-state" class="hidden py-16 text-center">
+        <div class="inline-flex flex-col items-center gap-3 text-gray-400">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-14 w-14 text-teal-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+          </svg>
+          <p class="font-semibold text-gray-500">Belum ada data</p>
+          <p class="text-sm text-gray-400">Tambah manual di form atas, atau import dari file Excel.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer tabel: statistik -->
+    <div id="tabel-footer" class="hidden border-t border-teal-100 bg-teal-50 px-6 py-3">
+      <div class="flex flex-wrap gap-4 text-xs font-semibold text-teal-700">
+        <span>Total: <span id="stat-total" class="text-teal-900">0</span> siswa</span>
+        <span>🟡 Kurus: <span id="stat-kurus">0</span></span>
+        <span>🟢 Normal: <span id="stat-normal">0</span></span>
+        <span>🟠 Gemuk: <span id="stat-gemuk">0</span></span>
+        <span>🔴 Obesitas: <span id="stat-obesitas">0</span></span>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="mt-8 pb-8 text-center text-xs text-teal-600">
+  <p>© 2025 Posyandu Remaja Digital &nbsp;·&nbsp; Dibuat untuk keperluan akademik &amp; lapangan</p>
+</footer>
+
+<!-- =====================================================
+     MODAL 1: KONFIRMASI HAPUS
+====================================================== -->
+<div id="modal-overlay" class="modal-wrap" role="dialog" aria-modal="true">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
+    <div class="bg-red-500 px-6 py-4 flex items-center gap-3">
+      <div class="bg-white/20 rounded-lg p-1.5">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+        </svg>
+      </div>
+      <h3 class="text-white font-bold text-base">Konfirmasi Hapus</h3>
+    </div>
+    <div class="px-6 py-5">
+      <p class="text-gray-700 text-sm leading-relaxed">
+        Apakah Anda yakin ingin menghapus data
+        <strong id="modal-nama" class="text-red-600"></strong>?
+        <br/><span class="text-gray-500">Tindakan ini tidak dapat dibatalkan.</span>
+      </p>
+    </div>
+    <div class="px-6 pb-5 flex gap-3">
+      <button onclick="tutupModal()"
+        class="flex-1 btn-ripple border border-gray-200 text-gray-600 font-semibold py-2.5 rounded-xl text-sm hover:bg-gray-50 transition">
+        Batal
+      </button>
+      <button id="btn-konfirmasi-hapus"
+        class="flex-1 btn-ripple bg-red-500 hover:bg-red-600 text-white font-bold py-2.5 rounded-xl text-sm transition">
+        Ya, Hapus
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- =====================================================
+     MODAL 2: PREVIEW IMPORT EXCEL
+     Menampilkan ringkasan baris yang akan dimasukkan
+     sebelum pengguna mengkonfirmasi
+====================================================== -->
+<div id="modal-import" class="modal-wrap" role="dialog" aria-modal="true">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden flex flex-col" style="max-height:90vh">
+    <!-- Header modal import -->
+    <div class="bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-4 flex items-center gap-3 flex-shrink-0">
+      <div class="bg-white/20 rounded-lg p-1.5">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+        </svg>
+      </div>
+      <div>
+        <h3 class="text-white font-bold text-base">Preview Import Excel</h3>
+        <p id="import-subtitle" class="text-emerald-100 text-xs mt-0.5"></p>
+      </div>
+    </div>
+
+    <!-- Tabel preview data yang akan diimport (scrollable) -->
+    <div class="overflow-auto flex-1 p-4">
+      <p class="text-xs text-gray-500 mb-3">Periksa data berikut sebelum mengkonfirmasi import ke dalam sistem:</p>
+      <table class="w-full text-xs border-collapse">
+        <thead class="bg-teal-50 sticky top-0">
+          <tr>
+            <th class="border border-teal-100 px-3 py-2 text-left text-teal-700 font-bold">Nama</th>
+            <th class="border border-teal-100 px-3 py-2 text-left text-teal-700 font-bold">Kelas</th>
+            <th class="border border-teal-100 px-3 py-2 text-left text-teal-700 font-bold">BB</th>
+            <th class="border border-teal-100 px-3 py-2 text-left text-teal-700 font-bold">TB</th>
+            <th class="border border-teal-100 px-3 py-2 text-left text-teal-700 font-bold">TD</th>
+            <th class="border border-teal-100 px-3 py-2 text-left text-teal-700 font-bold">IMT</th>
+            <th class="border border-teal-100 px-3 py-2 text-left text-teal-700 font-bold">Status</th>
+          </tr>
+        </thead>
+        <tbody id="preview-body"></tbody>
+      </table>
+    </div>
+
+    <!-- Footer modal import: tombol aksi -->
+    <div class="px-6 py-4 border-t border-gray-100 flex gap-3 flex-shrink-0">
+      <button onclick="tutupModalImport()"
+        class="flex-1 btn-ripple border border-gray-200 text-gray-600 font-semibold py-2.5 rounded-xl text-sm hover:bg-gray-50 transition">
+        Batal
+      </button>
+      <button onclick="konfirmasiImport()"
+        class="flex-1 btn-ripple bg-gradient-to-r from-emerald-600 to-teal-600
+               hover:from-emerald-700 hover:to-teal-700 text-white font-bold py-2.5 rounded-xl text-sm transition">
+        ✅ Konfirmasi Import
+      </button>
+    </div>
+  </div>
+</div>
+
+
+<!-- =====================================================
+     JAVASCRIPT – Logika Aplikasi Lengkap
+     Dibagi per bagian dengan komentar akademik
+====================================================== -->
+<script>
+  /* =========================================================
+     BAGIAN 1: INISIALISASI & STATE GLOBAL
+     (Sequence: dijalankan pertama kali saat halaman dimuat)
+  ========================================================= */
+
+  /**
+   * dataRemaja: Array utama penyimpan semua objek data siswa.
+   * Diambil dari LocalStorage jika ada, jika tidak maka kosong.
+   *
+   * Struktur objek (versi 2 – tambah field "td"):
+   * {
+   *   id     : number  – ID unik berbasis timestamp
+   *   nama   : string  – Nama lengkap
+   *   kelas  : string  – "5 SD", "6 SD", dll
+   *   berat  : number  – kg
+   *   tinggi : number  – cm
+   *   imt    : number  – hasil perhitungan IMT
+   *   status : string  – kategori gizi
+   *   td     : string  – tekanan darah, bisa kosong
+   * }
+   */
+  let dataRemaja = JSON.parse(localStorage.getItem("dataRemaja")) || [];
+
+  /* State form: mode tambah atau edit */
+  let modEdit  = false;
+  let idTarget = null;
+
+  /* Kelas yang ditampilkan di tabel utama (FILTER) */
+  const KELAS_FILTER = ["5 SD", "6 SD"];
+
+  /**
+   * pendingImport: Array sementara untuk menampung data hasil
+   * parsing Excel sebelum dikonfirmasi pengguna via modal.
+   */
+  let pendingImport = [];
+
+  /* =========================================================
+     BAGIAN 2: LOGIKA MATEMATIKA GIZI
+  ========================================================= */
+
+  /**
+   * hitungIMT(berat, tinggi)
+   * Rumus: IMT = Berat(kg) / Tinggi(m)²
+   */
+  function hitungIMT(berat, tinggi) {
+    const m = tinggi / 100;
+    return parseFloat((berat / (m * m)).toFixed(2));
+  }
+
+  /**
+   * hitungStatusGizi(imt)
+   * IF/ELSE berantai: Menentukan kategori gizi dari nilai IMT.
+   * Standar: WHO / Kemenkes RI untuk usia sekolah dasar
+   */
+  function hitungStatusGizi(imt) {
+    if (imt < 17.5)      return "Kurus";
+    else if (imt < 25.0) return "Normal";
+    else if (imt < 27.0) return "Gemuk";
+    else                 return "Obesitas";
+  }
+
+  /** Mapping status gizi → class CSS badge warna */
+  function getBadgeClass(status) {
+    if (status === "Kurus")    return "badge badge-kurus";
+    if (status === "Normal")   return "badge badge-normal";
+    if (status === "Gemuk")    return "badge badge-gemuk";
+    if (status === "Obesitas") return "badge badge-obesitas";
+    return "badge";
+  }
+
+  /* =========================================================
+     BAGIAN 3: LOCALSTORAGE – Persistensi Data
+  ========================================================= */
+
+  /**
+   * simpanKeStorage()
+   * JSON.stringify mengubah array objek → string untuk disimpan
+   */
+  function simpanKeStorage() {
+    localStorage.setItem("dataRemaja", JSON.stringify(dataRemaja));
+  }
+
+  /* =========================================================
+     BAGIAN 4: RENDER TABEL (DOM Manipulation + Looping)
+  ========================================================= */
+
+  /**
+   * renderTabel()
+   * SEQUENCE: Filter → Loop → Buat elemen DOM → Append ke tabel
+   * Juga memperbarui ringkasan di kartu Export.
+   */
+  function renderTabel() {
+    const tbody      = document.getElementById("tabel-body");
+    const emptyState = document.getElementById("empty-state");
+    const footer     = document.getElementById("tabel-footer");
+
+    // DOM: Kosongkan isi tabel sebelum render ulang
+    tbody.innerHTML = "";
+
+    // FILTER (Array.filter): Hanya tampilkan kelas 5 & 6 SD
+    const dataFiltered = dataRemaja.filter(s => KELAS_FILTER.includes(s.kelas));
+
+    // Penghitung statistik
+    let statKurus = 0, statNormal = 0, statGemuk = 0, statObesitas = 0;
+
+    // IF/ELSE: Tampilkan empty state jika tidak ada data terfilter
+    if (dataFiltered.length === 0) {
+      emptyState.classList.remove("hidden");
+      footer.classList.add("hidden");
+    } else {
+      emptyState.classList.add("hidden");
+      footer.classList.remove("hidden");
+
+      // LOOPING (forEach): Render setiap objek siswa menjadi baris <tr>
+      dataFiltered.forEach((siswa, index) => {
+        const tr = document.createElement("tr");
+        tr.className = "row-anim border-b border-gray-50 hover:bg-teal-50/40 transition-colors";
+
+        const badgeClass = getBadgeClass(siswa.status);
+
+        // IF/ELSE: Akumulasi statistik per kategori
+        if (siswa.status === "Kurus")    statKurus++;
+        if (siswa.status === "Normal")   statNormal++;
+        if (siswa.status === "Gemuk")    statGemuk++;
+        if (siswa.status === "Obesitas") statObesitas++;
+
+        const tdTampil  = siswa.td || "–";
+        const tglTampil = siswa.tanggal
+          ? new Date(siswa.tanggal).toLocaleDateString("id-ID", { day:"2-digit", month:"short", year:"numeric" })
+          : "–";
+
+        tr.innerHTML = `
+          <td class="px-4 py-3 text-gray-400 font-medium text-xs">${index + 1}</td>
+          <td class="px-4 py-3 font-semibold text-gray-800">${siswa.nama}</td>
+          <td class="px-4 py-3">
+            <span class="bg-teal-100 text-teal-800 text-xs font-bold px-2.5 py-1 rounded-full">${siswa.kelas}</span>
+          </td>
+          <td class="px-4 py-3 text-gray-600">${siswa.berat}</td>
+          <td class="px-4 py-3 text-gray-600">${siswa.tinggi}</td>
+          <td class="px-4 py-3 font-mono text-sm font-semibold text-teal-700">${siswa.imt}</td>
+          <td class="px-4 py-3 font-mono text-xs text-gray-600">${tdTampil}</td>
+          <td class="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">${tglTampil}</td>
+          <td class="px-4 py-3"><span class="${badgeClass}">${siswa.status}</span></td>
+          <td class="px-4 py-3">
+            <div class="flex items-center justify-center gap-2">
+              <button onclick="editData(${siswa.id})"
+                class="btn-ripple bg-amber-50 hover:bg-amber-100 border border-amber-200
+                       text-amber-700 text-xs font-bold px-3 py-1.5 rounded-lg transition">
+                Edit
+              </button>
+              <button onclick="bukaModal(${siswa.id})"
+                class="btn-ripple bg-red-50 hover:bg-red-100 border border-red-200
+                       text-red-600 text-xs font-bold px-3 py-1.5 rounded-lg transition">
+                Hapus
+              </button>
+            </div>
+          </td>
+        `;
+        // DOM: Tambahkan baris ke <tbody>
+        tbody.appendChild(tr);
+      });
+
+      // Update statistik footer tabel
+      document.getElementById("stat-total").textContent    = dataFiltered.length;
+      document.getElementById("stat-kurus").textContent    = statKurus;
+      document.getElementById("stat-normal").textContent   = statNormal;
+      document.getElementById("stat-gemuk").textContent    = statGemuk;
+      document.getElementById("stat-obesitas").textContent = statObesitas;
+    }
+
+    // Update counter header & kartu export
+    document.getElementById("counter-total").textContent = dataFiltered.length;
+    updateKartuExport(dataFiltered, statKurus, statNormal, statGemuk, statObesitas);
+  }
+
+  /**
+   * updateKartuExport(data, ...)
+   * Memperbarui angka di kotak ringkasan kartu Export
+   * sehingga kader bisa melihat preview sebelum klik tombol Export.
+   */
+  function updateKartuExport(data, kurus, normal, gemuk, obesitas) {
+    document.getElementById("export-total").textContent    = data.length;
+    document.getElementById("export-normal").textContent   = normal;
+    document.getElementById("export-kurus").textContent    = kurus;
+    document.getElementById("export-abnormal").textContent = gemuk + obesitas;
+  }
+
+  /* =========================================================
+     BAGIAN 5: VALIDASI & SUBMIT FORM
+  ========================================================= */
+
+  /**
+   * handleSubmit()
+   * SEQUENCE: Ambil input → Validasi (IF/ELSE) → Hitung →
+   *           Simpan/Update array → LocalStorage → Render → Reset
+   */
+  function handleSubmit() {
+    const nama   = document.getElementById("input-nama").value.trim();
+    const kelas  = document.getElementById("input-kelas").value;
+    const berat  = parseFloat(document.getElementById("input-berat").value);
+    const tinggi = parseFloat(document.getElementById("input-tinggi").value);
+    const td     = document.getElementById("input-td").value.trim();
+
+    // IF/ELSE VALIDASI: Field wajib harus diisi
+    if (!nama || !kelas || isNaN(berat) || isNaN(tinggi)) {
+      tampilkanError("Semua field wajib (Nama, Kelas, BB, TB) harus diisi!");
+      return;
+    }
+    if (berat < 10 || berat > 200) {
+      tampilkanError("Berat badan harus antara 10 – 200 kg.");
+      return;
+    }
+    if (tinggi < 50 || tinggi > 250) {
+      tampilkanError("Tinggi badan harus antara 50 – 250 cm.");
+      return;
+    }
+
+    sembunyikanError();
+
+    const imt    = hitungIMT(berat, tinggi);
+    const status = hitungStatusGizi(imt);
+
+    // IF modEdit → update | ELSE → tambah baru
+    if (modEdit && idTarget !== null) {
+      const idx = dataRemaja.findIndex(s => s.id === idTarget);
+      if (idx !== -1) {
+        dataRemaja[idx] = { ...dataRemaja[idx], nama, kelas, berat, tinggi, imt, status, td };
+      }
+    } else {
+      dataRemaja.push({ id: Date.now(), nama, kelas, berat, tinggi, imt, status, td, tanggal: new Date().toISOString() });
+    }
+
+    simpanKeStorage();
+    renderTabel();
+    resetForm();
+    tampilkanToast("✅", `Data <strong>${nama}</strong> berhasil disimpan!`, "green");
+  }
+
+  /* =========================================================
+     BAGIAN 6: EDIT DATA
+  ========================================================= */
+  function editData(id) {
+    const siswa = dataRemaja.find(s => s.id === id);
+    if (!siswa) return;
+
+    document.getElementById("input-nama").value   = siswa.nama;
+    document.getElementById("input-kelas").value  = siswa.kelas;
+    document.getElementById("input-berat").value  = siswa.berat;
+    document.getElementById("input-tinggi").value = siswa.tinggi;
+    document.getElementById("input-td").value     = siswa.td || "";
+
+    document.getElementById("form-title").textContent      = "Edit Data Remaja";
+    document.getElementById("btn-simpan-text").textContent = "Simpan Perubahan";
+    document.getElementById("btn-batal").classList.remove("hidden");
+
+    modEdit  = true;
+    idTarget = id;
+
+    document.getElementById("input-nama").scrollIntoView({ behavior: "smooth" });
+    document.getElementById("input-nama").focus();
+  }
+
+  /* =========================================================
+     BAGIAN 7: HAPUS DATA + MODAL KONFIRMASI
+  ========================================================= */
+  let idHapusTarget = null;
+
+  function bukaModal(id) {
+    const siswa = dataRemaja.find(s => s.id === id);
+    if (!siswa) return;
+    document.getElementById("modal-nama").textContent = siswa.nama;
+    idHapusTarget = id;
+    document.getElementById("modal-overlay").classList.add("show");
+    document.getElementById("btn-konfirmasi-hapus").onclick = konfirmasiHapus;
+  }
+
+  function tutupModal() {
+    document.getElementById("modal-overlay").classList.remove("show");
+    idHapusTarget = null;
+  }
+
+  function konfirmasiHapus() {
+    const nama = dataRemaja.find(s => s.id === idHapusTarget)?.nama || "";
+    dataRemaja = dataRemaja.filter(s => s.id !== idHapusTarget);
+    simpanKeStorage();
+    renderTabel();
+    tutupModal();
+    tampilkanToast("🗑️", `Data <strong>${nama}</strong> telah dihapus.`, "red");
+  }
+
+  /* =========================================================
+     BAGIAN 8: RESET FORM
+  ========================================================= */
+  function resetForm() {
+    ["input-nama","input-kelas","input-berat","input-tinggi","input-td"]
+      .forEach(id => document.getElementById(id).value = "");
+
+    document.getElementById("form-title").textContent      = "Tambah Data Remaja";
+    document.getElementById("btn-simpan-text").textContent = "Tambah Data";
+    document.getElementById("btn-batal").classList.add("hidden");
+
+    modEdit  = false;
+    idTarget = null;
+    sembunyikanError();
+  }
+
+  /* =========================================================
+     BAGIAN 9: UTILITAS ERROR & TOAST NOTIFIKASI
+  ========================================================= */
+  function tampilkanError(pesan) {
+    document.getElementById("pesan-error-text").textContent = pesan;
+    document.getElementById("pesan-error").classList.remove("hidden");
+  }
+  function sembunyikanError() {
+    document.getElementById("pesan-error").classList.add("hidden");
+  }
+
+  /**
+   * tampilkanToast(icon, pesan, warna)
+   * DOM: Mengubah class elemen #toast untuk memicu animasi CSS slide-up.
+   * Toast otomatis menghilang setelah 3.5 detik (setTimeout).
+   *
+   * @param {string} icon  – Emoji
+   * @param {string} pesan – Pesan (boleh HTML)
+   * @param {string} warna – "green" | "red" | "blue" | "amber"
+   */
+  function tampilkanToast(icon, pesan, warna = "green") {
+    const borderMap = {
+      green: "border-green-200",
+      red:   "border-red-200",
+      blue:  "border-blue-200",
+      amber: "border-amber-200",
+    };
+    const inner = document.getElementById("toast-inner");
+    inner.className = `flex items-center gap-3 bg-white border rounded-2xl px-5 py-3.5 shadow-xl ${borderMap[warna] || "border-green-200"}`;
+
+    document.getElementById("toast-icon").textContent = icon;
+    document.getElementById("toast-text").innerHTML   = pesan;
+
+    const toast = document.getElementById("toast");
+    toast.classList.add("show");
+    // IF: Sudah ada timer sebelumnya, bersihkan dulu
+    if (toast._timer) clearTimeout(toast._timer);
+    toast._timer = setTimeout(() => toast.classList.remove("show"), 3500);
+  }
+
+  /* =========================================================
+     BAGIAN 10: EXPORT EXCEL (SheetJS)
+     Mengubah array data terfilter → file .xlsx yang bisa diunduh
+  ========================================================= */
+
+  /**
+   * exportExcel()
+   * SEQUENCE:
+   * 1. Filter data kelas 5 & 6 SD
+   * 2. Validasi ada data
+   * 3. Buat header + LOOPING rows → array 2D
+   * 4. SheetJS: aoa_to_sheet() + book_new() + writeFile()
+   * 5. Trigger unduhan browser
+   */
+  function exportExcel() {
+    // FILTER: Hanya data kelas 5 & 6 SD yang diekspor
+    const dataEkspor = dataRemaja.filter(s => KELAS_FILTER.includes(s.kelas));
+
+    // IF: Tidak ada data → tampilkan peringatan
+    if (dataEkspor.length === 0) {
+      tampilkanToast("⚠️", "Tidak ada data Kelas 5 & 6 SD untuk diekspor.", "amber");
+      return;
+    }
+
+    // SEQUENCE: Definisikan header baris pertama Excel
+    const header = [
+      "No", "Nama", "Kelas", "Berat Badan (kg)", "Tinggi Badan (cm)",
+      "IMT", "Tekanan Darah", "Status Gizi", "Tanggal Input"
+    ];
+
+    const rows = dataEkspor.map((s, i) => [
+      i + 1, s.nama, s.kelas, s.berat, s.tinggi, s.imt, s.td || "-", s.status,
+      s.tanggal ? new Date(s.tanggal).toLocaleDateString("id-ID", { day:"2-digit", month:"short", year:"numeric" }) : "-",
+    ]);
+
+    // Gabungkan header + rows menjadi array 2D (Array of Arrays)
+    const sheetData = [header, ...rows];
+
+    // SheetJS API: Buat worksheet dari array 2D
+    const ws = XLSX.utils.aoa_to_sheet(sheetData);
+
+    // SheetJS: Atur lebar kolom agar rapi
+    ws["!cols"] = [
+      { wch: 5  }, { wch: 25 }, { wch: 10 }, { wch: 18 },
+      { wch: 18 }, { wch: 10 }, { wch: 16 }, { wch: 14 }, { wch: 16 },
+    ];
+
+    // SheetJS: Buat workbook dan tambahkan sheet
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Data Posyandu");
+
+    // SEQUENCE: Nama file dengan tanggal hari ini
+    const tgl      = new Date().toISOString().split("T")[0];
+    const namaFile = `Posyandu_Remaja_${tgl}.xlsx`;
+
+    // SheetJS: Trigger unduhan file .xlsx ke browser
+    XLSX.writeFile(wb, namaFile);
+
+    tampilkanToast("📥", `<strong>${namaFile}</strong> berhasil diunduh!`, "green");
+  }
+
+  /**
+   * unduhTemplate()
+   * Buat dan unduh file Excel kosong (hanya header) sebagai template
+   * untuk kader yang ingin mengisi data via Excel terlebih dahulu.
+   */
+  function unduhTemplate() {
+    // Array 2D berisi satu baris header saja
+    const header = [["Nama", "Kelas", "BB", "TB", "TekananDarah"]];
+
+    const ws = XLSX.utils.aoa_to_sheet(header);
+    ws["!cols"] = [{ wch:25 }, { wch:10 }, { wch:8 }, { wch:8 }, { wch:16 }];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Template");
+
+    XLSX.writeFile(wb, "Template_Posyandu_Remaja.xlsx");
+    tampilkanToast("📄", "Template Excel kosong berhasil diunduh!", "blue");
+  }
+
+  /* =========================================================
+     BAGIAN 11: IMPORT EXCEL (SheetJS + FileReader API)
+  ========================================================= */
+
+  /**
+   * prosesFileExcel(file)
+   * Fungsi inti import. Menerima objek File dari input atau drag-drop.
+   *
+   * SEQUENCE:
+   * 1. Validasi ekstensi file (IF/ELSE)
+   * 2. Tampilkan progress bar
+   * 3. FileReader membaca file sebagai ArrayBuffer (async)
+   * 4. SheetJS parsing workbook → JSON
+   * 5. VALIDASI KOLOM WAJIB (LOOPING + IF)
+   * 6. LOOPING konversi baris → objek dataRemaja
+   * 7. Tampilkan modal preview
+   *
+   * @param {File} file – Objek File dari FileReader
+   */
+  function prosesFileExcel(file) {
+    // IF: Ekstensi bukan .xlsx / .xls
+    if (!file.name.match(/\.(xlsx|xls)$/i)) {
+      tampilkanToast("❌", "Format tidak didukung. Gunakan file .xlsx atau .xls", "red");
+      return;
+    }
+
+    // DOM: Tampilkan progress bar
+    tampilkanProgress("Membaca file...");
+    setProgress(10, "Membaca file...");
+
+    const reader = new FileReader();
+
+    // Event handler: dipanggil setelah file selesai dibaca
+    reader.onload = function(e) {
+      try {
+        setProgress(40, "Parsing Excel...");
+
+        // SheetJS: Baca binary data menjadi workbook
+        const data     = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: "array" });
+
+        // Ambil sheet pertama dari workbook
+        const namaSheet = workbook.SheetNames[0];
+        const ws        = workbook.Sheets[namaSheet];
+
+        // SheetJS: Konversi worksheet → array objek (baris pertama = header/key)
+        const jsonData = XLSX.utils.sheet_to_json(ws, { defval: "" });
+
+        // IF: File Excel kosong
+        if (jsonData.length === 0) {
+          sembunyikanProgress();
+          tampilkanToast("⚠️", "File Excel tidak memiliki data.", "amber");
+          return;
+        }
+
+        setProgress(60, "Validasi kolom...");
+
+        // VALIDASI KOLOM WAJIB
+        // LOOPING: Cek satu per satu kolom yang harus ada
+        const kolomWajib = ["Nama", "Kelas", "BB", "TB"];
+        const kolomAda   = Object.keys(jsonData[0]);
+
+        for (const kol of kolomWajib) {
+          // IF: Kolom wajib tidak ditemukan di header Excel
+          if (!kolomAda.includes(kol)) {
+            sembunyikanProgress();
+            tampilkanToast(
+              "❌",
+              `Kolom <strong>"${kol}"</strong> tidak ditemukan di file. ` +
+              `Header yang dibutuhkan: <strong>Nama, Kelas, BB, TB, TekananDarah</strong>`,
+              "red"
+            );
+            return;
+          }
+        }
+
+        setProgress(80, "Memproses baris data...");
+
+        // LOOPING: Konversi setiap baris JSON → objek dataRemaja
+        const hasilImport = [];
+        let rowError = 0;
+
+        jsonData.forEach((row, i) => {
+          // Ambil dan bersihkan nilai setiap kolom
+          const nama   = String(row["Nama"]         || "").trim();
+          const kelas  = String(row["Kelas"]        || "").trim();
+          const berat  = parseFloat(row["BB"]);
+          const tinggi = parseFloat(row["TB"]);
+          const td     = String(row["TekananDarah"] || "").trim();
+
+          // IF: Baris tidak valid (field wajib kosong/NaN) → lewati
+          if (!nama || !kelas || isNaN(berat) || isNaN(tinggi)) {
+            rowError++;
+            return; // 'return' dalam forEach = lanjut ke baris berikutnya
+          }
+
+          const imt    = hitungIMT(berat, tinggi);
+          const status = hitungStatusGizi(imt);
+
+          // Tambahkan ke hasil import
+          hasilImport.push({
+            id: Date.now() + i + Math.random(), // ID unik dengan offset
+            nama, kelas, berat, tinggi, imt, status, td,
+          });
+        });
+
+        setProgress(100, "Selesai!");
+
+        // IF: Tidak ada baris yang valid setelah diproses
+        if (hasilImport.length === 0) {
+          sembunyikanProgress();
+          tampilkanToast("⚠️", "Tidak ada baris data valid yang bisa diimport.", "amber");
+          return;
+        }
+
+        // Simpan ke pendingImport, tampilkan modal preview setelah delay
+        pendingImport = hasilImport;
+        setTimeout(() => {
+          sembunyikanProgress();
+          tampilkanModalImport(hasilImport, rowError);
+        }, 600);
+
+      } catch (err) {
+        sembunyikanProgress();
+        tampilkanToast("❌", "Gagal membaca file: " + err.message, "red");
+      }
+    };
+
+    // Mulai baca file sebagai ArrayBuffer (binary)
+    reader.readAsArrayBuffer(file);
+  }
+
+  /**
+   * konfirmasiImport()
+   * Dipanggil saat pengguna klik "Konfirmasi Import" di modal preview.
+   * SEQUENCE: Gabungkan pendingImport ke dataRemaja → simpan → render
+   */
+  function konfirmasiImport() {
+    const jumlah = pendingImport.length;
+
+    // Gabungkan: data lama + data baru dari import (spread operator)
+    dataRemaja = [...dataRemaja, ...pendingImport];
+    pendingImport = []; // Bersihkan array sementara
+
+    simpanKeStorage();
+    renderTabel();
+    tutupModalImport();
+    tampilkanToast("✅", `<strong>${jumlah} data</strong> berhasil diimport ke sistem!`, "green");
+  }
+
+  /* =========================================================
+     BAGIAN 12: EVENT HANDLER FILE INPUT & DRAG-DROP
+  ========================================================= */
+
+  /** Dipanggil saat pengguna memilih file via input[type=file] */
+  function handleFileSelect(event) {
+    const file = event.target.files[0];
+    if (file) prosesFileExcel(file);
+    event.target.value = ""; // Reset agar file yang sama bisa dipilih lagi
+  }
+
+  /** Drag over: mencegah browser buka file & beri visual feedback */
+  function handleDragOver(event) {
+    event.preventDefault();
+    document.getElementById("drop-zone").classList.add("drag-over");
+  }
+
+  /** Drag leave: hapus visual feedback */
+  function handleDragLeave() {
+    document.getElementById("drop-zone").classList.remove("drag-over");
+  }
+
+  /** Drop: ambil file dari event drag-drop */
+  function handleDrop(event) {
+    event.preventDefault();
+    document.getElementById("drop-zone").classList.remove("drag-over");
+    const file = event.dataTransfer.files[0];
+    if (file) prosesFileExcel(file);
+  }
+
+  /* =========================================================
+     BAGIAN 13: MODAL PREVIEW IMPORT
+  ========================================================= */
+
+  /**
+   * tampilkanModalImport(data, errorCount)
+   * LOOPING: Render setiap objek hasilImport menjadi baris tabel preview.
+   *
+   * @param {Array}  data       – Array objek hasil parsing
+   * @param {number} errorCount – Jumlah baris yang dilewati karena error
+   */
+  function tampilkanModalImport(data, errorCount) {
+    const tbody = document.getElementById("preview-body");
+    tbody.innerHTML = "";
+
+    // Update subtitle modal dengan ringkasan
+    let subtitle = `${data.length} baris siap diimport`;
+    if (errorCount > 0) subtitle += ` · ${errorCount} baris dilewati (data tidak lengkap)`;
+    document.getElementById("import-subtitle").textContent = subtitle;
+
+    // LOOPING: Render setiap baris ke tabel preview
+    data.forEach((s, i) => {
+      const tr = document.createElement("tr");
+      // IF: baris genap → putih | baris ganjil → abu terang
+      tr.className = i % 2 === 0 ? "bg-white" : "bg-gray-50";
+      tr.innerHTML = `
+        <td class="border border-gray-100 px-3 py-1.5">${s.nama}</td>
+        <td class="border border-gray-100 px-3 py-1.5">${s.kelas}</td>
+        <td class="border border-gray-100 px-3 py-1.5">${s.berat}</td>
+        <td class="border border-gray-100 px-3 py-1.5">${s.tinggi}</td>
+        <td class="border border-gray-100 px-3 py-1.5">${s.td || "–"}</td>
+        <td class="border border-gray-100 px-3 py-1.5 font-mono">${s.imt}</td>
+        <td class="border border-gray-100 px-3 py-1.5">
+          <span class="${getBadgeClass(s.status)}">${s.status}</span>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    document.getElementById("modal-import").classList.add("show");
+  }
+
+  function tutupModalImport() {
+    document.getElementById("modal-import").classList.remove("show");
+    pendingImport = [];
+  }
+
+  /* =========================================================
+     BAGIAN 14: PROGRESS BAR IMPORT
+     DOM: Mengubah style.width elemen #progress-bar
+  ========================================================= */
+
+  function tampilkanProgress(label) {
+    document.getElementById("progress-wrap").classList.remove("hidden");
+    document.getElementById("progress-label").textContent = label;
+    document.getElementById("progress-bar").style.width   = "0%";
+    document.getElementById("progress-pct").textContent   = "0%";
+  }
+
+  function setProgress(pct, label) {
+    document.getElementById("progress-bar").style.width = pct + "%";
+    document.getElementById("progress-pct").textContent = pct + "%";
+    if (label) document.getElementById("progress-label").textContent = label;
+  }
+
+  function sembunyikanProgress() {
+    document.getElementById("progress-wrap").classList.add("hidden");
+  }
+
+  /* =========================================================
+     BAGIAN 15: TUTUP MODAL JIKA KLIK DI LUAR AREA MODAL
+  ========================================================= */
+  document.getElementById("modal-overlay").addEventListener("click", function(e) {
+    if (e.target === this) tutupModal();
+  });
+  document.getElementById("modal-import").addEventListener("click", function(e) {
+    if (e.target === this) tutupModalImport();
+  });
+
+  /* =========================================================
+     SEQUENCE UTAMA – ENTRY POINT
+     Render tabel pertama kali setelah semua fungsi terdefinisi
+  ========================================================= */
+  renderTabel();
+</script>
+</body>
+</html>
