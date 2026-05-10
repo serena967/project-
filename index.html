@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Posyandu Remaja Digital</title>
+
+  <!-- CDN: Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- CDN: SheetJS untuk Import & Export Excel -->
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+
+  <link rel="stylesheet" href="style.css"/>   <!-- baris 12 -->
+  <script src="script.js"></script>            <!-- baris akhir body -->
+  <!-- CSS kustom (file terpisah) -->
+  <link rel="stylesheet" href="style.css"/>
+</head>
+
+<!-- =====================================================
+     BODY – Struktur Semantik HTML5
+     Menggunakan: header, main, section, footer
+====================================================== -->
+<body class="bg-teal-50 min-h-screen text-slate-800 text-sm">
+
+  <!-- ===== TOAST NOTIFIKASI ===== -->
+  <div id="toast">
+    <div id="toast-inner"
+      class="flex items-center gap-3 bg-white border rounded-2xl px-5 py-3
+             shadow-xl text-sm font-semibold text-gray-800 min-w-[260px]">
+    </div>
+  </div>
+
+  <!-- ===== HEADER (Semantic HTML5) ===== -->
+  <header class="bg-gradient-to-r from-teal-700 to-teal-500 text-white shadow-md px-5 py-4 flex items-center gap-3">
+    <div class="bg-white/20 rounded-xl p-2.5 text-2xl">♥</div>
+    <div>
+      <h1 class="font-extrabold text-lg leading-tight">Posyandu Remaja Digital</h1>
+      <p class="text-teal-100 text-xs">Pencatatan Data Gizi Remaja – Kelas 5 &amp; 6 SD</p>
+    </div>
+    <div class="ml-auto bg-white/20 border border-white/30 rounded-xl px-4 py-2 text-center min-w-[72px]">
+      <b id="cnt" class="block text-2xl">0</b>
+      <span class="text-xs text-teal-100">Total Data</span>
+    </div>
+  </header>
+
+  <!-- ===== MAIN (Semantic HTML5) ===== -->
+  <main class="max-w-5xl mx-auto px-4 py-6 space-y-6">
+
+    <!-- ================================================
+         SECTION 1: FORM INPUT
+         Sequence: isi form → validasi → hitung → simpan
+    ================================================= -->
+    <section class="bg-white rounded-2xl border border-teal-100 shadow-sm overflow-hidden">
+      <div class="bg-gradient-to-r from-teal-600 to-teal-500 px-5 py-3 text-white font-bold"
+           id="form-title">＋ Tambah Data Remaja</div>
+
+      <div class="p-5">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+          <!-- Nama Lengkap -->
+          <div class="sm:col-span-2">
+            <label class="block text-xs font-semibold text-teal-800 mb-1">
+              Nama Lengkap <span class="text-red-500">*</span>
+            </label>
+            <input id="f-nama" type="text" placeholder="Contoh: Budi Santoso"
+              class="w-full border border-gray-200 rounded-xl px-4 py-2.5 bg-gray-50 transition"/>
+          </div>
+
+          <!-- Kelas -->
+          <div>
+            <label class="block text-xs font-semibold text-teal-800 mb-1">
+              Kelas <span class="text-red-500">*</span>
+            </label>
+            <select id="f-kelas"
+              class="w-full border border-gray-200 rounded-xl px-4 py-2.5 bg-gray-50 transition cursor-pointer">
+              <option value="">-- Pilih Kelas --</option>
+              <option>1 SD</option>
+              <option>2 SD</option>
+              <option>3 SD</option>
+              <option>4 SD</option>
+              <option>5 SD</option>
+              <option>6 SD</option>
+              <option>7 SMP</option>
+              <option>8 SMP</option>
+              <option>9 SMP</option>
+            </select>
+          </div>
+
+          <!-- Berat Badan -->
+          <div>
+            <label class="block text-xs font-semibold text-teal-800 mb-1">
+              Berat Badan (kg) <span class="text-red-500">*</span>
+            </label>
+            <input id="f-bb" type="number" min="10" max="200" placeholder="35"
+              class="w-full border border-gray-200 rounded-xl px-4 py-2.5 bg-gray-50 transition"/>
+          </div>
+
+          <!-- Tinggi Badan -->
+          <div>
+            <label class="block text-xs font-semibold text-teal-800 mb-1">
+              Tinggi Badan (cm) <span class="text-red-500">*</span>
+            </label>
+            <input id="f-tb" type="number" min="50" max="250" placeholder="140"
+              class="w-full border border-gray-200 rounded-xl px-4 py-2.5 bg-gray-50 transition"/>
+          </div>
+
+          <!-- Tekanan Darah (opsional) -->
+          <div>
+            <label class="block text-xs font-semibold text-teal-800 mb-1">
+              Tekanan Darah
+              <span class="text-gray-400 font-normal">(opsional, cth: 110/70)</span>
+            </label>
+            <input id="f-td" type="text" placeholder="Sistolik/Diastolik"
+              class="w-full border border-gray-200 rounded-xl px-4 py-2.5 bg-gray-50 transition"/>
+          </div>
+
+          <!-- Pesan Error (IF/ELSE: tampil jika validasi gagal) -->
+          <div id="err"
+            class="sm:col-span-2 hidden bg-red-50 border border-red-200 text-red-600
+                   rounded-xl px-4 py-2.5 text-xs font-medium flex items-center gap-2">
+            <span>⚠</span><span id="err-txt"></span>
+          </div>
+
+        </div>
+
+        <!-- Tombol Aksi Form -->
+        <div class="flex gap-3 mt-4">
+          <button onclick="submitForm()"
+            class="flex-1 bg-teal-600 hover:bg-teal-700 active:scale-95 text-white
+                   font-bold py-2.5 rounded-xl transition">
+            <span id="btn-txt">＋ Tambah Data</span>
+          </button>
+          <button id="btn-batal" onclick="resetForm()"
+            class="hidden px-5 bg-gray-100 hover:bg-gray-200 text-gray-600
+                   font-bold py-2.5 rounded-xl transition">
+            Batal
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================
+         SECTION 2: IMPORT & EXPORT EXCEL
+         Didukung SheetJS – berjalan 100% di browser
+    ================================================= -->
+    <section class="bg-white rounded-2xl border border-teal-100 shadow-sm overflow-hidden">
+      <div class="bg-gradient-to-r from-emerald-600 to-teal-500 px-5 py-3 text-white font-bold">
+        📊 Import &amp; Export Excel
+      </div>
+
+      <div class="p-5 grid grid-cols-1 md:grid-cols-2 gap-6">
+
+        <!-- ===== KOLOM KIRI: IMPORT ===== -->
+        <div class="space-y-3">
+          <p class="text-xs font-bold text-teal-800">⬆ Import dari File Excel</p>
+
+          <!-- Area Drag & Drop -->
+          <div id="drop"
+            class="drop border-2 border-dashed border-teal-200 rounded-xl p-6 text-center
+                   cursor-pointer hover:border-teal-400 hover:bg-teal-50 transition"
+            onclick="document.getElementById('fi').click()"
+            ondragover="evDrag(event, 1)"
+            ondragleave="evDrag(event, 0)"
+            ondrop="evDrop(event)">
+            <div class="text-3xl text-teal-300 mb-2">⬆</div>
+            <p class="text-gray-500 font-medium text-xs">Seret file ke sini atau klik untuk pilih</p>
+            <p class="text-gray-400 text-xs mt-1">Format: .xlsx / .xls</p>
+          </div>
+
+          <!-- Input file tersembunyi -->
+          <input id="fi" type="file" accept=".xlsx,.xls"
+            class="hidden" onchange="importFile(event)"/>
+
+          <!-- Info format kolom -->
+          <div class="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-700">
+            <b class="block mb-1">📋 Format kolom yang dibutuhkan:</b>
+            Nama &nbsp;·&nbsp; Kelas &nbsp;·&nbsp; BB &nbsp;·&nbsp; TB &nbsp;·&nbsp;
+            TekananDarah <span class="text-amber-400">(opsional)</span>
+          </div>
+
+          <!-- Progress Bar Import -->
+          <div id="prog-wrap" class="hidden">
+            <div class="flex justify-between text-xs text-teal-700 font-semibold mb-1">
+              <span id="prog-lbl">Memproses...</span>
+              <span id="prog-pct">0%</span>
+            </div>
+            <div class="w-full bg-teal-100 rounded-full h-2.5 overflow-hidden">
+              <div id="prog-fill"
+                class="h-full bg-gradient-to-r from-teal-400 to-emerald-500 rounded-full
+                       transition-all duration-500" style="width: 0%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== KOLOM KANAN: EXPORT ===== -->
+        <div class="space-y-3">
+          <p class="text-xs font-bold text-teal-800">⬇ Export ke File Excel</p>
+
+          <!-- Ringkasan Statistik -->
+          <div class="bg-teal-50 border border-teal-200 rounded-xl p-4">
+            <p class="text-xs font-bold text-teal-700 mb-3">📈 Ringkasan Data (Kelas 5 &amp; 6 SD)</p>
+            <div class="grid grid-cols-2 gap-2">
+              <div class="bg-white rounded-lg p-2.5 border border-teal-100 text-center">
+                <b id="es-tot" class="block text-xl text-teal-700">0</b>
+                <span class="text-xs text-gray-500">Total</span>
+              </div>
+              <div class="bg-white rounded-lg p-2.5 border border-teal-100 text-center">
+                <b id="es-n" class="block text-xl text-green-600">0</b>
+                <span class="text-xs text-gray-500">Normal</span>
+              </div>
+              <div class="bg-white rounded-lg p-2.5 border border-amber-100 text-center">
+                <b id="es-k" class="block text-lg text-amber-600">0</b>
+                <span class="text-xs text-gray-500">Kurus</span>
+              </div>
+              <div class="bg-white rounded-lg p-2.5 border border-red-100 text-center">
+                <b id="es-a" class="block text-lg text-red-500">0</b>
+                <span class="text-xs text-gray-500">Gemuk/Obesitas</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tombol Export -->
+          <button onclick="exportExcel()"
+            class="w-full bg-gradient-to-r from-emerald-600 to-teal-500
+                   hover:from-emerald-700 hover:to-teal-600 text-white font-bold
+                   py-3 rounded-xl transition active:scale-95">
+            ⬇ Export ke Excel (.xlsx)
+          </button>
+
+          <!-- Tombol Unduh Template -->
+          <button onclick="unduhTemplate()"
+            class="w-full border-2 border-teal-200 hover:bg-teal-50 text-teal-700
+                   font-semibold py-2.5 rounded-xl transition">
+            📄 Unduh Template Kosong
+          </button>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ================================================
+         SECTION 3: TABEL DATA
+         Looping: setiap item di array → satu baris <tr>
+    ================================================= -->
+    <section class="bg-white rounded-2xl border border-teal-100 shadow-sm overflow-hidden">
+      <div class="bg-gradient-to-r from-teal-700 to-teal-600 px-5 py-3 text-white font-bold
+                  flex flex-wrap items-center justify-between gap-2">
+        <span>
+          📋 Data Remaja
+          <span class="text-teal-200 font-normal text-xs">(Kelas 5 &amp; 6 SD)</span>
+        </span>
+        <span class="bg-teal-500/40 border border-white/20 rounded-lg px-2 py-1 text-xs">
+          🔍 Filter: Kelas 5 &amp; 6 SD
+        </span>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead class="bg-teal-50 border-b border-teal-100">
+            <tr>
+              <th class="px-3 py-3 text-left text-teal-700 uppercase tracking-wide font-bold">No</th>
+              <th class="px-3 py-3 text-left text-teal-700 uppercase tracking-wide font-bold">Nama</th>
+              <th class="px-3 py-3 text-left text-teal-700 uppercase tracking-wide font-bold">Kelas</th>
+              <th class="px-3 py-3 text-left text-teal-700 uppercase tracking-wide font-bold">BB</th>
+              <th class="px-3 py-3 text-left text-teal-700 uppercase tracking-wide font-bold">TB</th>
+              <th class="px-3 py-3 text-left text-teal-700 uppercase tracking-wide font-bold">IMT</th>
+              <th class="px-3 py-3 text-left text-teal-700 uppercase tracking-wide font-bold">T.Darah</th>
+              <th class="px-3 py-3 text-left text-teal-700 uppercase tracking-wide font-bold">Tanggal</th>
+              <th class="px-3 py-3 text-left text-teal-700 uppercase tracking-wide font-bold">Status Gizi</th>
+              <th class="px-3 py-3 text-center text-teal-700 uppercase tracking-wide font-bold">Aksi</th>
+            </tr>
+          </thead>
+          <!-- tbody diisi secara dinamis oleh JavaScript (DOM Manipulation) -->
+          <tbody id="tbody"></tbody>
+        </table>
+
+        <!-- Empty State (IF: tampil jika tidak ada data) -->
+        <div id="empty" class="py-14 text-center text-gray-400">
+          <div class="text-5xl mb-3 text-teal-200">📋</div>
+          <p class="font-semibold text-gray-500">Belum ada data</p>
+          <p class="text-xs mt-1">Tambah manual lewat form di atas, atau import dari file Excel.</p>
+        </div>
+      </div>
+
+      <!-- Footer Statistik Tabel -->
+      <div id="fstat"
+        class="hidden border-t border-teal-100 bg-teal-50 px-5 py-2.5
+               flex flex-wrap gap-x-5 gap-y-1 text-xs font-semibold text-teal-700">
+        Total: <span id="s-tot">0</span> siswa &nbsp;|&nbsp;
+        🟡 Kurus: <span id="s-k">0</span> &nbsp;
+        🟢 Normal: <span id="s-n">0</span> &nbsp;
+        🟠 Gemuk: <span id="s-g">0</span> &nbsp;
+        🔴 Obesitas: <span id="s-o">0</span>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ===== FOOTER (Semantic HTML5) ===== -->
+  <footer class="py-6 text-center text-xs text-teal-500 border-t border-teal-100 mt-4">
+    © 2026 Posyandu Remaja Digital &nbsp;·&nbsp;
+    Nok Faiqoh Gitasari project 
+  </footer>
+
+  <!-- ================================================
+       MODAL KONFIRMASI HAPUS
+  ================================================= -->
+  <div class="modal" id="modal">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
+      <div class="bg-red-500 px-5 py-3.5 text-white font-bold flex items-center gap-2">
+        ⚠ Konfirmasi Hapus
+      </div>
+      <div class="px-5 py-4 text-sm text-gray-700">
+        Hapus data <b id="m-nama" class="text-red-600"></b>?
+        <br/><span class="text-gray-400 text-xs">Tindakan ini tidak dapat dibatalkan.</span>
+      </div>
+      <div class="px-5 pb-4 flex gap-3">
+        <button onclick="closeModal()"
+          class="flex-1 border border-gray-200 text-gray-600 font-semibold
+                 py-2.5 rounded-xl hover:bg-gray-50 transition">
+          Batal
+        </button>
+        <button onclick="doDelete()"
+          class="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold
+                 py-2.5 rounded-xl transition">
+          Ya, Hapus
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript (file terpisah) — dimuat paling akhir -->
+  <script src="script.js"></script>
+
+</body>
+</html>
